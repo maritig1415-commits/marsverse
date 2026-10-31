@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MARSVERSE — Interactive Mars Atlas</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#090b10;--panel:#11151d;--line:#2b303b;--red:#ff654d;--muted:#9ca5b5;--white:#f4f5f7}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--white);font-family:Inter,system-ui,Arial,sans-serif}
+.app{height:100%;display:flex;flex-direction:column}.top{z-index:1000;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;background:rgba(9,11,16,.96);border-bottom:1px solid var(--line)}
+.brand{font-weight:850;letter-spacing:.18em}.brand span{color:var(--red)}.sub{font-size:11px;color:var(--muted);letter-spacing:.16em;margin-top:4px}
+.controls{display:flex;gap:8px;align-items:center}.btn{background:#171c26;border:1px solid #343b49;color:#f5f5f5;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:650}.btn:hover{border-color:var(--red)}
+.main{position:relative;flex:1;min-height:0}#map{height:100%;width:100%;background:#171014}
+.hud{position:absolute;z-index:500;top:16px;right:16px;left:auto;width:min(285px,calc(100% - 32px));padding:16px;background:rgba(12,15,21,.92);border:1px solid #35313a;border-radius:12px;backdrop-filter:blur(10px);pointer-events:none}
+.kicker{font-size:10px;color:var(--red);letter-spacing:.2em;font-weight:800}.hud h1{font-size:20px;margin:7px 0}.hud p{font-size:12px;color:#b5bdca;line-height:1.55;margin:0}
+.legend{position:absolute;z-index:500;bottom:28px;left:16px;background:rgba(12,15,21,.92);border:1px solid #35313a;border-radius:10px;padding:12px 14px;font-size:11px;color:#c5cbd5;line-height:1.8}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:7px;box-shadow:0 0 9px var(--red)}
+.credit{position:absolute;z-index:500;bottom:4px;right:8px;font-size:10px;color:#ddd;text-shadow:0 1px 3px #000}
+.leaflet-container{font:inherit}.leaflet-control-zoom a{background:#11151d!important;color:#fff!important;border-color:#343b49!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#11151d;color:#f4f5f7;border:1px solid #353b48}
+.leaflet-popup-content{margin:14px 16px;line-height:1.5}.popup-k{color:var(--red);font-size:10px;letter-spacing:.16em;font-weight:800}.popup-title{font-size:17px;font-weight:850;margin:4px 0}.popup-desc{font-size:12px;color:#c0c7d2;max-width:230px}
+.region-pin{width:14px;height:14px;border-radius:50%;background:#ff684f;border:2px solid #fff;box-shadow:0 0 0 5px rgba(255,104,79,.2),0 0 18px #ff684f}
+.region-label{display:flex;align-items:center;gap:7px;white-space:nowrap;color:#fff;font-size:11px;font-weight:850;letter-spacing:.12em;text-shadow:0 2px 5px #000,0 0 8px #000}
+.region-label .region-pin{flex:0 0 14px}
+.leaflet-tooltip.region-tag{background:rgba(10,13,19,.88);border:1px solid rgba(255,104,79,.65);border-radius:6px;color:#fff;padding:5px 8px;box-shadow:0 3px 12px #0008}
+.leaflet-tooltip.region-tag:before{display:none}
+.footer{padding:9px 16px;background:#090b10;border-top:1px solid var(--line);font-size:10px;color:#858e9d;line-height:1.5}
+@media(max-width:600px){.hud{top:10px;right:10px;left:auto;width:205px}.top{padding:12px}.brand{font-size:13px}.sub{font-size:9px}.btn{padding:8px;font-size:11px}.hud{top:10px;left:10px;padding:12px;width:230px}.hud h1{font-size:17px}.legend{left:10px;bottom:25px;padding:9px 11px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top">
+ <div><div class="brand">MARS<span>VERSE</span></div><div class="sub">INTERACTIVE MARS ATLAS</div></div>
+ <div class="controls"><button class="btn" id="home">⌖ Reset view</button><button class="btn" id="lang">RU</button></div>
+</header>
+<main class="main">
+ <div id="map"></div>
+ <section class="hud"><div class="kicker" id="kicker">PLANETARY EXPLORATION</div><h1 id="headline">Explore the Red Planet</h1><p id="intro">Pan across Mars, zoom into its terrain and select a highlighted MARSVERSE region to discover its digital world.</p></section>
+ <aside class="legend" id="legend"><div><span class="dot"></span>MARSVERSE digital regions</div><div>Scroll or pinch to zoom</div><div>Drag to explore</div></aside>
+ <div class="credit">Basemap: OpenPlanetaryMap · Mars data</div>
+</main>
+<footer class="footer" id="disclaimer">MARSVERSE regions are fictional digital destinations placed on a Mars map. They do not represent ownership, sale, or rights to real land on Mars. No token sale or investment offer is being made.</footer>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map=L.map('map',{center:[0,0],zoom:2,minZoom:1,maxZoom:7,zoomControl:true,worldCopyJump:false});
+map.zoomControl.setPosition('bottomright');
+const tiles=L.tileLayer('https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-mars-basemap-v0-2/all/{z}/{x}/{y}.png',{
+  minZoom:0,maxZoom:7,attribution:'Tiles © <a href="https://openplanetarymap.org/" target="_blank" rel="noopener">OpenPlanetaryMap</a>',noWrap:true
+}).addTo(map);
+const regions=[
+ {id:'olympus',name:'OLYMPUS',coords:[18.65,-133.8],en:'A highland exploration zone inspired by Olympus Mons, the giant shield volcano of Mars. Discover routes, missions and digital collectibles.',ru:'Регион высокогорных экспедиций, вдохновлённый Олимпом — гигантским вулканом Марса. Здесь будут маршруты, миссии и цифровые коллекции.'},
+ {id:'valles',name:'VALLES',coords:[-13.9,-59.2],en:'A canyon world inspired by Valles Marineris, one of the largest canyon systems in the Solar System.',ru:'Мир каньонов, вдохновлённый Долинами Маринера — одной из крупнейших систем каньонов в Солнечной системе.'},
+ {id:'newdawn',name:'NEW DAWN',coords:[5,15],en:'The imagined community hub of MARSVERSE: a place for explorers, creators and future digital experiences.',ru:'Вымышленный центр сообщества MARSVERSE — место для исследователей, создателей и будущих цифровых событий.'},
+ {id:'polaris',name:'POLARIS',coords:[78,35],en:'A polar research region inspired by the icy landscapes and seasonal processes near the Martian north pole.',ru:'Полярный исследовательский регион, вдохновлённый ледяными ландшафтами и сезонными процессами у северного полюса Марса.'},
+ {id:'frontier',name:'RED FRONTIER',coords:[-35,125],en:'An imagined frontier for discovery, expeditions and community-created stories.',ru:'Вымышленная территория новых открытий, экспедиций и историй, созданных сообществом.'}
+];
+let lang='en';
+function popup(r){return `<div class="popup-k">MARSVERSE REGION</div><div class="popup-title">${r.name}</div><div class="popup-desc">${r[lang]}</div>`}
+regions.forEach(r=>{
+ const icon=L.divIcon({className:'',html:`<div class="region-label"><span class="region-pin"></span><span>${r.name}</span></div>`,iconSize:[145,22],iconAnchor:[7,11]});
+ L.marker(r.coords,{icon}).addTo(map).bindPopup(popup(r),{closeButton:true});
+});
+document.getElementById('home').onclick=()=>map.setView([0,0],2);
+document.getElementById('lang').onclick=()=>{
+ lang=lang==='en'?'ru':'en';
+ document.getElementById('lang').textContent=lang==='en'?'RU':'EN';
+ document.getElementById('kicker').textContent=lang==='en'?'PLANETARY EXPLORATION':'ИССЛЕДОВАНИЕ ПЛАНЕТЫ';
+ document.getElementById('headline').textContent=lang==='en'?'Explore the Red Planet':'Исследуй Красную планету';
+ document.getElementById('intro').textContent=lang==='en'?'Pan across Mars, zoom into its terrain and select a highlighted MARSVERSE region to discover its digital world.':'Перемещайся по Марсу, приближай поверхность и нажимай на регионы MARSVERSE, чтобы открыть их цифровые миры.';
+ document.getElementById('legend').innerHTML=lang==='en'?'<div><span class="dot"></span>MARSVERSE digital regions</div><div>Scroll or pinch to zoom</div><div>Drag to explore</div>':'<div><span class="dot"></span>Цифровые регионы MARSVERSE</div><div>Колесо мыши или щипок — масштаб</div><div>Перетаскивай карту</div>';
+ document.getElementById('disclaimer').textContent=lang==='en'?'MARSVERSE regions are fictional digital destinations placed on a Mars map. They do not represent ownership, sale, or rights to real land on Mars. No token sale or investment offer is being made.':'Регионы MARSVERSE — вымышленные цифровые территории на карте Марса. Они не означают владение, продажу или права на реальные участки Марса. Продажа токенов и инвестиционные предложения не осуществляются.';
+ map.eachLayer(l=>{if(l instanceof L.Marker){const r=regions.find(x=>x.coords[0]===l.getLatLng().lat&&x.coords[1]===l.getLatLng().lng);if(r)l.setPopupContent(popup(r));}});
+};
+</script>
+</body>
+</html>
